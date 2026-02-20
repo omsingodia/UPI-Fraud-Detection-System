@@ -13,8 +13,6 @@ df = pd.read_csv(
     "../dataset/PS_20174392719_1491204439457_log.csv",
     nrows=1000000
 )
-
-# Apply features
 df = apply_features(df, training=True)
 
 X = df.drop("isFraud", axis=1)
@@ -82,5 +80,6 @@ print("ROC-AUC:", roc_auc_score(y_test, final_prob))
 joblib.dump(xgb, "xgb_model.pkl")
 joblib.dump(lgb, "lgb_model.pkl")
 joblib.dump(X.columns.tolist(), "feature_order.pkl")
+
 
 print("\n✅ PRODUCTION-GRADE MODEL COMPLETE")
