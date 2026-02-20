@@ -1,1 +1,64 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: black;
+  color: white;
+  text-align: center;
+}
 
+/* center content */
+.container {
+  margin-top: 100px;
+}
+
+/* heading */
+h1 {
+  font-size: 40px;
+}
+
+/* subtitle */
+.subtitle {
+  color: gray;
+  margin-bottom: 30px;
+}
+
+/* form box */
+.form-box {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 20px;
+  margin: auto;
+  width: 300px;
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
+}
+
+/* input */
+input {
+  width: 90%;
+  padding: 12px;
+  margin: 10px;
+  border-radius: 8px;
+  border: none;
+  outline: none;
+}
+
+/* button */
+button {
+  padding: 12px 20px;
+  background: white;
+  color: black;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: gray;
+}
+
+/* result */
+#result {
+  margin-top: 20px;
+  font-size: 22px;
+  font-weight: bold;
+}
