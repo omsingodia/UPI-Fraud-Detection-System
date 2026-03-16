@@ -6,12 +6,12 @@ Endpoints:
   GET  /         — Status dashboard
   GET  /health   — JSON health check
   POST /predict  — Payment fraud risk (amount + receiver UPI ID)
-  POST /verify   — Phone / Bank Account risk check
+  POST /verify  — Phone / Bank Account risk check
 """
 
+import pandas as pd
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pandas as pd
 import numpy as np
 import hashlib
 import logging
@@ -64,54 +64,59 @@ def build_row(amount, tx_type_code, step, old_bal, new_bal,
 
 
 def paySim_features(risk: float, amount: float, rng):
-    """
-    Construct PaySim-authentic transaction features for a given risk level.
 
-    PaySim FRAUD pattern (risk → 1.0):
-      type=CASH_OUT, newbalanceOrig=0 (full drain),
-      relative_amount≈1, balance_change_ratio≈-1,
-      high mule_indicator, rare_receiver=1
-
-    SAFE pattern (risk → 0.0):
-      type=PAYMENT, large remaining balance,
-      small relative_amount, low mule_indicator
-    """
-    # Transaction type escalates with risk
-    # Model was trained using .cat.codes which sorts alphabetically:
-    # CASH_IN=0, CASH_OUT=1, DEBIT=2, PAYMENT=3, TRANSFER=4
-    if risk > 0.65:
-        tx_type_code = 1   # CASH_OUT — PaySim fraud signature
-    elif risk > 0.35:
+    # -------------------------------
+    # 1️⃣ Transaction Type
+    # -------------------------------
+    if risk > 0.7:
+        tx_type_code = 1   # CASH_OUT (fraud signature)
+    elif risk > 0.4:
         tx_type_code = 4   # TRANSFER
     else:
-        tx_type_code = 3   # PAYMENT   — safest
+        tx_type_code = 3   # PAYMENT
 
-    # Balance: fraud drains account completely; safe transactions have lots left
-    if risk > 0.90:
-        # EXACT PaySim match: The amount requested perfectly matches the account balance.
+    # -------------------------------
+    # 2️⃣ Fraud Balance Simulation
+    # -------------------------------
+    if risk > 0.75:
+        # TRUE PaySim fraud pattern
         old_bal = amount
         new_bal = 0.0
     else:
-        noise = float(rng.uniform(200, 8000)) if risk < 0.8 else float(rng.uniform(0, 10))
-        balance_mult = 1.0 + (1.0 - risk) * 5.0
-        old_bal = (amount * balance_mult) + (noise * (1.0 - risk))
-        drain = risk ** 1.1   # smoother curve
-        new_bal = max(0.0, old_bal - (old_bal * drain))
+        old_bal = amount * rng.uniform(2, 6)
+        new_bal = old_bal - amount
 
-    # Destination: fraud accounts (mules) in PaySim often start completely empty (0.0)
-    old_bal_dest = 0.0 if risk > 0.8 else float(rng.uniform(100, 8000))
+    # -------------------------------
+    # 3️⃣ Destination Pattern
+    # -------------------------------
+    if risk > 0.75:
+        old_bal_dest = 0.0
+    else:
+        old_bal_dest = float(rng.uniform(500, 10000))
+
     new_bal_dest = old_bal_dest + amount
 
-    # Mule indicator: In PaySim, fraud is a 1-off drain to a new account, so mule counts are LOW.
-    mule      = 1 if risk > 0.8 else max(1, int(1 + (1.0-risk) * 5 + float(rng.uniform(0, 4))))
-    rare      = 1 if risk > 0.50 else (1 if float(rng.uniform(0, 1)) > 0.75 else 0)
-    velocity  = 1 if risk > 0.8 else max(1, int(1 + (1.0-risk) * 5 + float(rng.uniform(0, 5))))
-    step      = int(rng.integers(1, 743))
+    # -------------------------------
+    # 4️⃣ Fraud Signals
+    # -------------------------------
+    mule = 1 if risk > 0.75 else int(rng.integers(1, 6))
+    rare = 1 if risk > 0.6 else 0
+    velocity = 1 if risk > 0.75 else int(rng.integers(1, 6))
 
-    return build_row(amount, tx_type_code, step,
-                     round(old_bal, 2), round(new_bal, 2),
-                     round(old_bal_dest, 2), round(new_bal_dest, 2),
-                     mule, rare, velocity)
+    step = int(rng.integers(1, 743))
+
+    return build_row(
+        amount,
+        tx_type_code,
+        step,
+        round(old_bal, 2),
+        round(new_bal, 2),
+        round(old_bal_dest, 2),
+        round(new_bal_dest, 2),
+        mule,
+        rare,
+        velocity
+    )
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
@@ -167,45 +172,103 @@ def health():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    """
-    Check Payment — fraud risk for a UPI transaction.
-
-    Request:  { "amount": 50000, "receiver": "rahul@upi" }
-    Response: { probability, risk_score, risk_bucket, decision, mule_detected, drain_ratio }
-    """
     try:
-        body     = request.get_json(force=True)
-        amount   = max(1.0, float(body.get("amount", 1000)))
-        receiver = str(body.get("receiver", "unknown"))
+        body = request.get_json(force=True)
 
-        log.info(f"/predict  amount={amount}  receiver={receiver}")
+        amount = float(body.get("amount", 0))
+        receiver = str(body.get("receiver", ""))
 
-        # Derive a deterministic risk profile from the receiver UPI ID
-        risk = risk_from_hash(receiver, salt="predict")
-        seed = int(hashlib.sha256(receiver.encode()).hexdigest(), 16) % (2**32)
-        rng  = np.random.default_rng(seed)
+        if amount <= 0:
+            return jsonify({"error": "Invalid amount"}), 400
 
-        # Check against known PaySim fraud dataset IDs
-        KNOWN_FRAUD_IDS = {"C553264065", "C38997010", "C972765878", "C1007251739", "C1848415041"}
-        if receiver in KNOWN_FRAUD_IDS:
-            effective_risk = 0.99
-            log.info(f"  -> Found known PaySim fraud ID! Forcing high risk.")
-        else:
-            # High amounts with low-balance accounts are riskier — blend in amount signal
-            # Large amounts (>50k) get a small risk boost regardless of receiver
-            amount_boost = min(0.25, amount / 200_000)
-            effective_risk = min(1.0, risk * 0.75 + amount_boost)
+        # Get explicit balance and time variables from Frontend
+        sender_balance = float(body.get("sender_balance", 0))
+        receiver_balance = float(body.get("receiver_balance", 0))
+        time_hour = int(body.get("time", 12))
 
-        df     = paySim_features(effective_risk, amount, rng)
+        # Calculate Post-Transaction Balances
+        newbalanceOrig = max(0, sender_balance - amount)
+        newbalanceDest = receiver_balance + amount
+
+        df = pd.DataFrame([{
+            "step": time_hour,  # Time of transaction
+            "type": 4,          # TRANSFER
+            "amount": amount,
+            "oldbalanceOrg": sender_balance,
+            "newbalanceOrig": newbalanceOrig,
+            "oldbalanceDest": receiver_balance,
+            "newbalanceDest": newbalanceDest,
+            "isFlaggedFraud": 0
+        }])
+
+        # Feature engineering (same as training)
+        df["relative_amount"] = amount / (sender_balance + 1)
+        df["balance_diff"] = sender_balance - newbalanceOrig
+        df["balance_change_ratio"] = (
+            newbalanceOrig - sender_balance
+        ) / (sender_balance + 1)
+
+        df["velocity"] = 1
+        df["receiver_risk"] = 1
+        df["rare_receiver"] = 0
+        df["mule_indicator"] = 1
+
         result = engine.predict(df)
+        
+        # ─────────────────────────────
+        # 🔥 Strong Final Risk Logic
+        # ─────────────────────────────
+        
+        ml_score = result["risk_score"]
+        
+        # NaN Guard — if ML model returned NaN default to behavioural-only
+        import math
+        if math.isnan(float(ml_score)):
+            ml_score = 50  # neutral baseline
+        
+        # Define missing variables for the logic
+        drain_ratio = float(df["relative_amount"].iloc[0])
+        receiver_flag = True if amount > 50_000 else False
+        risk_boost = (drain_ratio * 15) if amount > 20000 else 0
 
-        # Annotate with human-readable signals
-        result["effective_risk_input"] = round(effective_risk, 3)
-        log.info(f"  -> risk_score={result['risk_score']}  bucket={result['risk_bucket']}")
+        # Late Night Rule (10 PM to 4 AM)
+        if time_hour >= 22 or time_hour <= 4:
+            risk_boost += 20
+
+        # Receiver has 0 balance = mule account flag
+        if receiver_balance == 0:
+            risk_boost += 15
+
+        # Combine ML + Behavioral Risk
+        final_score = min(100, max(0, int(
+            (ml_score * 0.7) + (risk_boost * 1.2)
+        )))
+
+        # Safety floor — high drain must never be low risk
+        if drain_ratio > 0.9:
+            final_score = max(final_score, 85)
+
+        if receiver_flag and amount > 100000:
+            final_score = max(final_score, 75)
+
+        # Decision Buckets
+        if final_score >= 80:
+            bucket = "HIGH RISK"
+            decision = "BLOCK_TRANSACTION"
+        elif final_score >= 50:
+            bucket = "MEDIUM RISK"
+            decision = "OTP_VERIFICATION"
+        else:
+            bucket = "LOW RISK"
+            decision = "ALLOW"
+            
+        result["risk_score"] = final_score
+        result["risk_bucket"] = bucket
+        result["decision"] = decision
+
         return jsonify(result)
 
     except Exception as e:
-        log.error(f"/predict error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -233,27 +296,44 @@ def verify():
         seed = int(hashlib.sha256(f"{id_type}:{identifier}".encode()).hexdigest(), 16) % (2**32)
         rng  = np.random.default_rng(seed)
 
-        KNOWN_FRAUD_IDS = {"C553264065", "C38997010", "C972765878", "C1007251739", "C1848415041"}
-        if identifier in KNOWN_FRAUD_IDS:
-            risk = 0.99
-            log.info(f"  -> Found known PaySim fraud ID! Forcing high risk.")
+        # No hardcoded overrides. Risk is purely deterministic based on the identifier hash.
 
         # Use a representative amount (average UPI fraud transaction ~₹25,000)
         amount = float(rng.uniform(5_000, 150_000))
-        df     = paySim_features(risk, amount, rng)
-        result = engine.predict(df)
 
-        # Attach human-readable signal summary
-        drain = 1.0 - float(df["newbalanceOrig"].iloc[0]) / (float(df["oldbalanceOrg"].iloc[0]) + 1)
-        result["signals"] = {
-            "amount":         round(amount, 2),
-            "txn_velocity":   int(df["velocity"].iloc[0]),
-            "mule_indicator": int(df["mule_indicator"].iloc[0]),
-            "rare_receiver":  int(df["rare_receiver"].iloc[0]),
-            "drain_ratio":    round(max(0, drain), 3),
+        df = paySim_features(risk, amount, rng)
+        raw_result = engine.predict(df)
+
+        # Safe extraction (avoid KeyError)
+        probability  = float(raw_result.get("probability", 0.0))
+        risk_score   = int(raw_result.get("risk_score", 0))
+        risk_bucket  = raw_result.get("risk_bucket", "UNKNOWN")
+        decision     = raw_result.get("decision", "REVIEW")
+        mule_detected = bool(raw_result.get("mule_detected", False))
+
+        # Drain ratio calculation
+        drain = 1.0 - float(df["newbalanceOrig"].iloc[0]) / (
+            float(df["oldbalanceOrg"].iloc[0]) + 1
+        )
+
+        response = {
+            "probability": probability,
+            "risk_score": risk_score,
+            "risk_bucket": risk_bucket,
+            "decision": decision,
+            "mule_detected": mule_detected,
+            "signals": {
+                "amount": round(amount, 2),
+                "txn_velocity": int(df["velocity"].iloc[0]),
+                "mule_indicator": int(df["mule_indicator"].iloc[0]),
+                "rare_receiver": int(df["rare_receiver"].iloc[0]),
+                "drain_ratio": round(max(0, drain), 3),
+            }
         }
-        log.info(f"  -> risk_score={result['risk_score']}  bucket={result['risk_bucket']}")
-        return jsonify(result)
+
+        log.info(f" -> risk_score={risk_score}  bucket={risk_bucket}")
+
+        return jsonify(response)
 
     except Exception as e:
         log.error(f"/verify error: {e}", exc_info=True)
