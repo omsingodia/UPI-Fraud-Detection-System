@@ -1,85 +1,72 @@
 import pandas as pd
 import numpy as np
+import xgboost as xgb
+import lightgbm as lgb
 import joblib
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, roc_auc_score
-from xgboost import XGBClassifier
-from lightgbm import LGBMClassifier
-from feature_pipeline import apply_features
 
-print("🚀 Loading 10 lakh rows...")
+def train_models():
+    print("[*] Loading synthetic dataset...")
+    df = pd.read_csv("synthetic_paysim.csv")
+    
+    # Define features and target
+    target = "isFraud"
+    features = [
+        "step", "type", "amount", "oldbalanceOrg", "newbalanceOrig", 
+        "oldbalanceDest", "newbalanceDest", "relative_amount", 
+        "balance_diff", "balance_change_ratio", "velocity", 
+        "receiver_risk", "rare_receiver", "mule_indicator"
+    ]
+    
+    X = df[features]
+    y = df[target]
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    
+    print(f"[*] Training on {len(X_train)} samples, testing on {len(X_test)} samples.")
+    
+    # XGBoost
+    print("[*] Training XGBoost Classifier...")
+    xgb_model = xgb.XGBClassifier(
+        n_estimators=100,
+        learning_rate=0.1,
+        max_depth=6,
+        random_state=42,
+        eval_metric='auc'
+    )
+    xgb_model.fit(X_train, y_train)
+    
+    # LightGBM
+    print("[*] Training LightGBM Classifier...")
+    lgb_model = lgb.LGBMClassifier(
+        n_estimators=100,
+        learning_rate=0.1,
+        max_depth=6,
+        random_state=42
+    )
+    lgb_model.fit(X_train, y_train)
+    
+    # Evaluation
+    print("\n[*] --- Model Evaluation ---")
+    xgb_preds = xgb_model.predict(X_test)
+    xgb_probs = xgb_model.predict_proba(X_test)[:, 1]
+    print("XGBoost AUC:", roc_auc_score(y_test, xgb_probs))
+    
+    lgb_preds = lgb_model.predict(X_test)
+    lgb_probs = lgb_model.predict_proba(X_test)[:, 1]
+    print("LightGBM AUC:", roc_auc_score(y_test, lgb_probs))
+    
+    # Ensemble eval
+    ensemble_probs = (xgb_probs * 0.6) + (lgb_probs * 0.4)
+    print("Ensemble AUC:", roc_auc_score(y_test, ensemble_probs))
+    
+    print("\n[*] Saving models to d:\\project\\upi-fraud-backend\\...")
+    joblib.dump(xgb_model, "..\\upi-fraud-backend\\xgb_model.pkl")
+    joblib.dump(lgb_model, "..\\upi-fraud-backend\\lgb_model.pkl")
+    joblib.dump(features, "..\\upi-fraud-backend\\feature_order.pkl")
+    
+    print("[OK] Models trained and saved successfully.")
 
-df = pd.read_csv(
-    "../dataset/PS_20174392719_1491204439457_log.csv",
-    nrows=1000000
-)
-df = apply_features(df, training=True)
-
-X = df.drop("isFraud", axis=1)
-y = df["isFraud"]
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y,
-    test_size=0.2,
-    random_state=42,
-    stratify=y
-)
-
-scale_pos_weight = len(y_train[y_train == 0]) / len(y_train[y_train == 1])
-
-# -----------------------------
-# XGBoost
-# -----------------------------
-
-xgb = XGBClassifier(
-    n_estimators=300,
-    max_depth=8,
-    learning_rate=0.05,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    scale_pos_weight=scale_pos_weight,
-    eval_metric="logloss",
-    random_state=42,
-    n_jobs=-1
-)
-
-xgb.fit(X_train, y_train)
-
-# -----------------------------
-# LightGBM
-# -----------------------------
-
-lgb = LGBMClassifier(
-    n_estimators=300,
-    learning_rate=0.05,
-    random_state=42
-)
-
-lgb.fit(X_train, y_train)
-
-# -----------------------------
-# Ensemble
-# -----------------------------
-
-xgb_prob = xgb.predict_proba(X_test)[:, 1]
-lgb_prob = lgb.predict_proba(X_test)[:, 1]
-
-final_prob = 0.6 * xgb_prob + 0.4 * lgb_prob
-
-THRESHOLD = 0.55
-y_pred = (final_prob >= THRESHOLD).astype(int)
-
-print("\n=== Classification Report ===")
-print(classification_report(y_test, y_pred))
-print("ROC-AUC:", roc_auc_score(y_test, final_prob))
-
-# -----------------------------
-# Save models + feature order
-# -----------------------------
-
-joblib.dump(xgb, "xgb_model.pkl")
-joblib.dump(lgb, "lgb_model.pkl")
-joblib.dump(X.columns.tolist(), "feature_order.pkl")
-
-
-print("\n✅ PRODUCTION-GRADE MODEL COMPLETE")
+if __name__ == "__main__":
+    train_models()
