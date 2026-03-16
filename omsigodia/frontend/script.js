@@ -14,39 +14,32 @@ form.onsubmit = async (e) => {
 
         let out = await res.json();
 
-        showResult(out.probability);
+        if (out.error) {
+            result.innerHTML = `<h3 style="color:#ff4444">❌ API Error: ${out.error}</h3>`;
+            return;
+        }
+
+        showResult(out);
 
     } catch (err) {
-        console.log("Backend not working, using fallback");
-
-        // 🔥 fallback logic (demo ke liye)
-        let prob = Math.random();  
-
-        showResult(prob);
+        result.innerHTML = "<h3 style='color:#ff4444'>❌ Backend not reachable</h3>";
     }
 };
 
 /* RESULT FUNCTION */
-function showResult(prob) {
-    let risk = Math.floor(prob * 100);
+function showResult(out) {
+    let risk = out.risk_score;
+    let decision = out.decision;
+    let bucket = out.risk_bucket || "LOW RISK";
 
     let color = "#00ff88";
-    let text = "SAFE";
-    let decision = "ALLOW";
 
-    if (risk > 70) {
-        color = "#ff4444";
-        text = "🚨 FRAUD DETECTED";
-        decision = "BLOCK TRANSACTION";
-    } else if (risk > 40) {
-        color = "#ff9800";
-        text = "⚠️ MEDIUM RISK";
-        decision = "OTP REQUIRED";
-    }
+    if (bucket === "HIGH RISK") color = "#ff4444";
+    else if (bucket === "MEDIUM RISK") color = "#ff9800";
 
     result.innerHTML = `
     <div class="result" style="border:2px solid ${color}">
-        <h2 style="color:${color}">${text}</h2>
+        <h2 style="color:${color}">${bucket}</h2>
         <p>Risk Score: ${risk}/100</p>
         <p><b>Decision:</b> ${decision}</p>
     </div>`;
