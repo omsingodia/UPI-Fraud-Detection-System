@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — UPI Shield AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #04080f;
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* ── Animated background gradient ── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 65% 55% at 15% 25%, rgba(0, 212, 255, 0.09) 0%, transparent 65%),
+                radial-gradient(ellipse 55% 65% at 85% 75%, rgba(124, 58, 237, 0.11) 0%, transparent 65%),
+                radial-gradient(ellipse 40% 40% at 50% 95%, rgba(0, 255, 136, 0.05) 0%, transparent 60%);
+            pointer-events: none;
+            animation: bgPulse 9s ease-in-out infinite alternate;
+        }
+
+        @keyframes bgPulse {
+            from {
+                opacity: .6
+            }
+
+            to {
+                opacity: 1
+            }
+        }
+
+        /* ── Orbs ── */
+        .orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(90px);
+            opacity: .18;
+            pointer-events: none;
+            animation: orbDrift ease-in-out infinite alternate;
+        }
+
+        .o1 {
+            width: 420px;
+            height: 420px;
+            background: #00d4ff;
+            top: -120px;
+            left: -120px;
+            animation-duration: 10s;
+        }
+
+        .o2 {
+            width: 380px;
+            height: 380px;
+            background: #7c3aed;
+            bottom: -100px;
+            right: -100px;
+            animation-duration: 13s;
+            animation-delay: -5s;
+        }
+
+        .o3 {
+            width: 260px;
+            height: 260px;
+            background: #00ff88;
+            top: 60%;
+            left: 55%;
+            animation-duration: 16s;
+            animation-delay: -9s;
+        }
+
+        @keyframes orbDrift {
+            from {
+                transform: translate(0, 0) scale(1);
+            }
+
+            to {
+                transform: translate(35px, 25px) scale(1.08);
+            }
+        }
+
+        /* ── Particle canvas ── */
+        #pc {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Card ── */
+        .card {
+            position: relative;
+            z-index: 10;
+            width: min(440px, calc(100vw - 32px));
+            background: rgba(11, 17, 32, 0.88);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 28px;
+            padding: 44px 40px;
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            box-shadow: 0 0 100px rgba(0, 212, 255, 0.07), 0 40px 100px rgba(0, 0, 0, 0.55);
+            animation: cardIn .75s cubic-bezier(.22, 1, .36, 1) both;
+        }
+
+        @keyframes cardIn {
+            from {
+                opacity: 0;
+                transform: translateY(50px) scale(.93);
+            }
+
+            to {
+                opacity: 1;
+                transform: none;
+            }
+        }
+
+        /* ── Logo ── */
+        .logo-wrap {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .logo-icon {
+            font-size: 50px;
+            display: inline-block;
+            animation: logoPulse 2.8s ease-in-out infinite;
+        }
+
+        @keyframes logoPulse {
+
+            0%,
+            100% {
+                filter: drop-shadow(0 0 10px rgba(0, 212, 255, .5));
+                transform: scale(1);
+            }
+
+            50% {
+                filter: drop-shadow(0 0 26px rgba(0, 212, 255, 1));
+                transform: scale(1.1);
+            }
+        }
+
+        .logo-name {
+            font-size: 24px;
+            font-weight: 900;
+            letter-spacing: -1px;
+            margin-top: 10px;
+            background: linear-gradient(90deg, #00d4ff, #a78bfa, #00ff88);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: nameShimmer 4s linear infinite;
+        }
+
+        @keyframes nameShimmer {
+            to {
+                background-position: 200% center;
+            }
+        }
+
+        .logo-sub {
+            font-size: 12px;
+            color: rgba(255, 255, 255, .3);
+            margin-top: 5px;
+            letter-spacing: .8px;
+        }
+
+        /* ── Tabs ── */
+        .tabs {
+            display: flex;
+            background: rgba(255, 255, 255, .04);
+            border: 1px solid rgba(255, 255, 255, .07);
+            border-radius: 14px;
+            padding: 5px;
+            margin-bottom: 28px;
+            gap: 4px;
+        }
+
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 11px;
+            border-radius: 11px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            color: rgba(255, 255, 255, .4);
+            transition: all .25s;
+            user-select: none;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, rgba(0, 212, 255, .12), rgba(124, 58, 237, .14));
+            color: #00d4ff;
+            box-shadow: 0 2px 14px rgba(0, 212, 255, .15);
+        }
+
+        /* ── Input ── */
+        .field {
+            margin-bottom: 16px;
+        }
+
+        .field label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            color: rgba(255, 255, 255, .38);
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            margin-bottom: 7px;
+        }
+
+        .field input {
+            width: 100%;
+            padding: 13px 16px;
+            background: rgba(255, 255, 255, .05);
+            border: 1.5px solid rgba(255, 255, 255, .1);
+            border-radius: 13px;
+            color: white;
+            font-size: 14px;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            transition: border .22s, box-shadow .22s;
+        }
+
+        .field input:focus {
+            border-color: #00d4ff;
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, .13);
+        }
+
+        .field input::placeholder {
+            color: rgba(255, 255, 255, .2);
+        }
+
+        /* ── Message ── */
+        .msg {
+            display: none;
+            font-size: 13px;
+            border-radius: 11px;
+            padding: 11px 16px;
+            margin-bottom: 16px;
+            animation: fadeIn .3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-4px)
+            }
+
+            to {
+                opacity: 1;
+                transform: none
+            }
+        }
+
+        .msg.err {
+            background: rgba(255, 68, 68, .1);
+            border: 1px solid rgba(255, 68, 68, .3);
+            color: #ff7070;
+        }
+
+        .msg.ok {
+            background: rgba(0, 255, 136, .08);
+            border: 1px solid rgba(0, 255, 136, .25);
+            color: #00ff88;
+        }
+
+        /* ── Primary button ── */
+        .btn {
+            width: 100%;
+            padding: 16px;
+            margin-top: 4px;
+            background: linear-gradient(135deg, #00d4ff, #7c3aed);
+            color: white;
+            border: none;
+            border-radius: 13px;
+            font-size: 15px;
+            font-weight: 800;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            letter-spacing: .3px;
+            position: relative;
+            overflow: hidden;
+            transition: transform .15s, box-shadow .15s;
+        }
+
+        .btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, .12), transparent);
+            opacity: 0;
+            transition: opacity .2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 36px rgba(0, 212, 255, .32);
+        }
+
+        .btn:hover::after {
+            opacity: 1;
+        }
+
+        .btn:active {
+            transform: scale(.97);
+        }
+
+        /* ── Demo hint ── */
+        .hint {
+            margin-top: 18px;
+            padding: 13px 16px;
+            background: rgba(0, 212, 255, .05);
+            border: 1px solid rgba(0, 212, 255, .14);
+            border-radius: 12px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, .38);
+            text-align: center;
+            line-height: 1.8;
+        }
+
+        .hint b {
+            color: #00d4ff;
+        }
+
+        /* ── Divider ── */
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 18px 0;
+            color: rgba(255, 255, 255, .2);
+            font-size: 11px;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(255, 255, 255, .08);
+        }
+
+        @media(max-width:480px) {
+            .card {
+                padding: 28px 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="orb o1"></div>
+    <div class="orb o2"></div>
+    <div class="orb o3"></div>
+    <canvas id="pc"></canvas>
+
+    <div class="card">
+        <!-- Logo -->
+        <div class="logo-wrap">
+            <div class="logo-icon">⚡</div>
+            <div class="logo-name">UPI Shield AI</div>
+            <div class="logo-sub">AI-Powered · Secure · Real-Time</div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" id="tabLogin" onclick="switchTab('login')">Sign In</div>
+            <div class="tab" id="tabSignup" onclick="switchTab('signup')">Create Account</div>
+        </div>
+
+        <!-- Message -->
+        <div class="msg" id="msg"></div>
+
+        <!-- ── LOGIN FORM ── -->
+        <div id="formLogin">
+            <div class="field">
+                <label>Email Address</label>
+                <input id="li_email" type="email" placeholder="you@example.com" autocomplete="email">
+            </div>
+            <div class="field">
+                <label>Password</label>
+                <input id="li_pass" type="password" placeholder="Enter your password" autocomplete="current-password">
+            </div>
+            <button class="btn" onclick="doLogin()">Sign In →</button>
+            <div class="hint">
+                🚀 <b>Quick demo:</b><br>
+                <b>demo@upishield.ai</b> &nbsp;|&nbsp; <b>demo123</b>
+            </div>
+        </div>
+
+        <!-- ── SIGNUP FORM ── -->
+        <div id="formSignup" style="display:none">
+            <div class="field">
+                <label>Full Name</label>
+                <input id="su_name" type="text" placeholder="Your full name">
+            </div>
+            <div class="field">
+                <label>Email Address</label>
+                <input id="su_email" type="email" placeholder="you@example.com">
+            </div>
+            <div class="field">
+                <label>Password</label>
+                <input id="su_pass" type="password" placeholder="Min. 6 characters">
+            </div>
+            <div class="field" style="margin-bottom:0">
+                <label>Confirm Password</label>
+                <input id="su_confirm" type="password" placeholder="Re-enter password">
+            </div>
+            <button class="btn" style="margin-top:20px" onclick="doSignup()">Create Account →</button>
+        </div>
+    </div>
+
+    <script>
+        /* ── Particles ── */
+        (function () {
+            const cv = document.getElementById('pc'), ctx = cv.getContext('2d');
+            let W, H, dots = [];
+            const resize = () => { W = cv.width = innerWidth; H = cv.height = innerHeight; };
+            window.addEventListener('resize', resize); resize();
+            for (let i = 0; i < 60; i++) dots.push({
+                x: Math.random() * W, y: Math.random() * H,
+                r: Math.random() * 1.4 + .4,
+                vx: (Math.random() - .5) * .38, vy: (Math.random() - .5) * .38,
+                a: Math.random() * .38 + .08
+            });
+            const draw = () => {
+                ctx.clearRect(0, 0, W, H);
+                dots.forEach(d => {
+                    d.x += d.vx; d.y += d.vy;
+                    if (d.x < 0) d.x = W; if (d.x > W) d.x = 0;
+                    if (d.y < 0) d.y = H; if (d.y > H) d.y = 0;
+                    ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(0,212,255,${d.a})`; ctx.fill();
+                });
+                for (let i = 0; i < dots.length; i++) for (let j = i + 1; j < dots.length; j++) {
+                    const dx = dots[i].x - dots[j].x, dy = dots[i].y - dots[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 130) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = `rgba(0,212,255,${.045 * (1 - dist / 130)})`;
+                        ctx.lineWidth = .6;
+                        ctx.moveTo(dots[i].x, dots[i].y); ctx.lineTo(dots[j].x, dots[j].y);
+                        ctx.stroke();
+                    }
+                }
+                requestAnimationFrame(draw);
+            };
+            draw();
+        })();
+
+        /* ── Tab switcher ── */
+        function switchTab(t) {
+            hideMsg();
+            document.getElementById('tabLogin').className = 'tab' + (t === 'login' ? ' active' : '');
+            document.getElementById('tabSignup').className = 'tab' + (t === 'signup' ? ' active' : '');
+            document.getElementById('formLogin').style.display = t === 'login' ? 'block' : 'none';
+            document.getElementById('formSignup').style.display = t === 'signup' ? 'block' : 'none';
+        }
+
+        /* ── Messages ── */
+        function showMsg(text, type) {
+            const el = document.getElementById('msg');
+            el.className = 'msg ' + type; el.textContent = text; el.style.display = 'block';
+        }
+        function hideMsg() { document.getElementById('msg').style.display = 'none'; }
+
+        /* ── Storage helpers ── */
+        const getUsers = () => JSON.parse(localStorage.getItem('upi_users') || '{}');
+        const saveUsers = u => localStorage.setItem('upi_users', JSON.stringify(u));
+
+        /* ── Login ── */
+        function doLogin() {
+            hideMsg();
+            const email = document.getElementById('li_email').value.trim().toLowerCase();
+            const pass = document.getElementById('li_pass').value;
+            if (!email || !pass) { showMsg('⚠️ Please fill in email and password.', 'err'); return; }
+
+            // Demo shortcut
+            if (email === 'demo@upishield.ai' && pass === 'demo123') {
+                enter({ name: 'Demo User', email }); return;
+            }
+            const users = getUsers();
+            if (!users[email]) { showMsg('❌ No account with that email. Please sign up.', 'err'); return; }
+            if (users[email].password !== pass) { showMsg('❌ Wrong password. Try again.', 'err'); return; }
+            enter({ name: users[email].name, email });
+        }
+
+        /* ── Sign Up ── */
+        function doSignup() {
+            hideMsg();
+            const name = document.getElementById('su_name').value.trim();
+            const email = document.getElementById('su_email').value.trim().toLowerCase();
+            const pass = document.getElementById('su_pass').value;
+            const confirm = document.getElementById('su_confirm').value;
+            if (!name || !email || !pass || !confirm) { showMsg('⚠️ Please fill in all fields.', 'err'); return; }
+            if (pass.length < 6) { showMsg('❌ Password must be at least 6 characters.', 'err'); return; }
+            if (pass !== confirm) { showMsg('❌ Passwords do not match.', 'err'); return; }
+            const users = getUsers();
+            if (users[email]) { showMsg('❌ An account already exists with this email.', 'err'); return; }
+            users[email] = { name, password: pass };
+            saveUsers(users);
+            showMsg('✅ Account created successfully! Signing you in...', 'ok');
+            setTimeout(() => enter({ name, email }), 900);
+        }
+
+        /* ── Enter the app ── */
+        function enter(user) {
+            localStorage.setItem('upi_session', JSON.stringify(user));
+            const btn = event ? event.target : null;
+            showMsg('✅ Welcome, ' + user.name + '! Redirecting...', 'ok');
+            setTimeout(() => { window.location.href = 'index.html'; }, 800);
+        }
+
+        /* ── If already logged in, skip to app ── */
+        if (localStorage.getItem('upi_session')) {
+            window.location.replace('index.html');
+        }
+
+        /* ── Enter key ── */
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'Enter') return;
+            const onLogin = document.getElementById('formLogin').style.display !== 'none';
+            if (onLogin) doLogin(); else doSignup();
+        });
+    </script>
+</body>
+
+</html>
