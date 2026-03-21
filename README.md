@@ -2,9 +2,8 @@
 
 A system that detects suspicious UPI transactions using rule-based analysis to prevent fraud in real-time.
 
-🚀 Demo
-🌐 Frontend: Add link
-⚙️ Backend: Add link
+🚀 Live Demo
+🌐 Frontend: https://upi-fraud-detection-system.vercel.app/
 
 🧠 Problem
 UPI fraud cases are increasing due to lack of real-time detection and user awareness.
